@@ -39,13 +39,15 @@ out-test/
 # 构建日志（每次构建覆盖）
 build-log.txt
 
-# 自检脚本写入 testdata 的生成物（tools/selftest_*.py 可再生）
+# 自检脚本与手工导出写入 testdata 的生成物（可再生）
 # 注意：同目录的 *.md 是输入夹具，必须保留
 testdata/selftest.html
 testdata/typora-selftest.html
 testdata/theme-*.html
 testdata/divergence.html
 testdata/divergence.md
+testdata/manual.html
+testdata/*.pdf
 
 # ---------------------------------------------------------------------------
 # IDE / 用户配置
