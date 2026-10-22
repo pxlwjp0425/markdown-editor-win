@@ -22,6 +22,9 @@
 #include <QDateTime>
 #include <QMessageBox>
 
+// 宽字符命令行 API（GetCommandLineW / CommandLineToArgvW）
+#include <windows.h>
+
 /**
  * 把内置 SVG 渲染成多尺寸 PNG 并拼成 ICO。
  *
@@ -165,6 +168,39 @@ static void logStartupArgs(int argc, char *argv[])
     f.close();
 }
 
+/**
+ * 取「宽字符版」的命令行参数。
+ *
+ * Windows GUI 程序的 main(argc, argv) 收到的是窄字符 argv，
+ * 由 CRT 按本地 ANSI 代码页转换而来（中文 Windows 上是 GBK）——
+ * emoji、日文假名、部分符号无法用 GBK 表示，会被替换成 '?'。
+ *
+ * 实测：双击 D:\User\obsidian\📚教材\...\卷6-合并.md 时，
+ * argv[1] 变成 "D:\User\obsidian\??教材\..."（📚 是代理对，
+ * 占两个 UTF-16 码元，于是变成两个 '?'），QFileInfo::exists()
+ * 自然为假，用户看到的就是「无法打开文件」。
+ * 而 QDir::currentPath() 是对的 —— 它走的是 GetCurrentDirectoryW()。
+ *
+ * 所以必须自己用 GetCommandLineW() + CommandLineToArgvW()
+ * 取原始宽字符命令行，绕开 CRT 的代码页转换。
+ */
+static QStringList wideCommandLineArgs()
+{
+    int wideArgc = 0;
+    LPWSTR *wideArgv = CommandLineToArgvW(GetCommandLineW(), &wideArgc);
+    if (!wideArgv) {
+        return QStringList();
+    }
+
+    QStringList args;
+    args.reserve(wideArgc);
+    for (int i = 0; i < wideArgc; ++i) {
+        args << QString::fromWCharArray(wideArgv[i]);
+    }
+    LocalFree(wideArgv);
+    return args;
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -275,7 +311,28 @@ int main(int argc, char *argv[])
     parser.addOption(dumpOutlineOption);
 
 
-    parser.process(app);
+    // 命令行解析必须用宽字符版本。
+    //
+    // parser.process(app) 内部用的是 QCoreApplication::arguments()，
+    // 而后者是 QString::fromLocal8Bit(argv[i]) —— 走本地代码页（GBK），
+    // 含 emoji 的路径会被破坏。所以这里改为用 wideCommandLineArgs()
+    // 自己解析，并手动补上 process() 原本会做的
+    // 「解析失败即退出」与 --version / --help 处理。
+    QStringList cmdArgs = wideCommandLineArgs();
+    if (cmdArgs.isEmpty()) {
+        // 宽字符取不到时退回 Qt 自己的参数（至少不会崩）
+        cmdArgs = QCoreApplication::arguments();
+    }
+    if (!parser.parse(cmdArgs)) {
+        fprintf(stderr, "%s\n", qPrintable(parser.errorText()));
+        return EXIT_FAILURE;
+    }
+    if (parser.isSet(QStringLiteral("version"))) {
+        parser.showVersion();
+    }
+    if (parser.isSet(QStringLiteral("help"))) {
+        parser.showHelp();
+    }
 
     // ---- 无界面导出模式 ----
     if (parser.isSet(exportOption)) {
