@@ -1,0 +1,76 @@
+# ---------------------------------------------------------------------------
+# 构建产物
+# ---------------------------------------------------------------------------
+build/
+dist/
+*.obj
+*.o
+*.exe
+*.dll
+*.a
+*.lib
+*.exp
+
+# CMake / Ninja 中间产物
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+.ninja_deps
+.ninja_log
+build.ninja
+*_autogen/
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.moc
+
+# ---------------------------------------------------------------------------
+# 运行期生成物
+# ---------------------------------------------------------------------------
+# 性能测试文档（tools/gen_bench_docs.py 可再生）
+benchdata/
+# 界面截图与对齐依据（tools/verify_*.py / shot_window.py 可再生）
+shots/
+# 导出格式自检产物
+dist/out-test/
+out-test/
+*.log
+# 构建日志（每次构建覆盖）
+build-log.txt
+
+# 自检脚本写入 testdata 的生成物（tools/selftest_*.py 可再生）
+# 注意：同目录的 *.md 是输入夹具，必须保留
+testdata/selftest.html
+testdata/typora-selftest.html
+testdata/theme-*.html
+testdata/divergence.html
+testdata/divergence.md
+
+# ---------------------------------------------------------------------------
+# IDE / 用户配置
+# ---------------------------------------------------------------------------
+.vs/
+.vscode/
+.idea/
+*.user
+*.user.*
+CMakeLists.txt.user
+*.pro.user
+*.sln
+*.suo
+
+# ---------------------------------------------------------------------------
+# 备份目录
+# ---------------------------------------------------------------------------
+src.bak-before-plaintext/
+*.bak
+*.orig
+*.rej
+
+# ---------------------------------------------------------------------------
+# 系统文件
+# ---------------------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store

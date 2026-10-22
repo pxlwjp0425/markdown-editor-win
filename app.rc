@@ -1,0 +1,11 @@
+// Windows 可执行文件图标资源。
+//
+// 没有这个文件，exe 在资源管理器里显示的是系统默认图标，
+// 任务栏和 Alt+Tab 也是默认图标 —— 看起来像个没做完的程序。
+//
+// app.ico 由程序自身的 --export-icon 生成（tools/gen_icons.py 里不生成它，
+// 因为需要 SVG 渲染能力）。图标源文件是 resources/icons/app-icon*.svg。
+//
+// IDI_ICON1 是资源名，数值 1 也可以；用名字更直观。
+
+IDI_ICON1 ICON "resources/app.ico"

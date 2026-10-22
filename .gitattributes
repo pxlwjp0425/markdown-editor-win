@@ -1,0 +1,24 @@
+# 统一换行符：仓库内用 LF，检出到 Windows 时转 CRLF。
+# C++ 源码里 \r\n 混用会让不同的工具链算出不同的行号，影响调试与补丁。
+* text=auto eol=lf
+
+*.cpp   text eol=lf
+*.h     text eol=lf
+*.py    text eol=lf
+*.js    text eol=lf
+*.cmake text eol=lf
+*.txt   text eol=lf
+*.md    text eol=lf
+*.qrc   text eol=lf
+*.svg   text eol=lf
+*.ps1   text eol=lf
+*.bat   text eol=crlf
+*.rc    text eol=lf
+
+# 二进制资源不做换行转换
+*.ico   binary
+*.pdf   binary
+*.docx  binary
+*.epub  binary
+*.jpg   binary
+*.png   binary

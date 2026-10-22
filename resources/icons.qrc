@@ -1,0 +1,46 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file alias="app.svg">icons/app.svg</file>
+        <file alias="app-icon.svg">icons/app-icon.svg</file>
+        <file alias="app-icon-small.svg">icons/app-icon-small.svg</file>
+        <file alias="blockquote.svg">icons/blockquote.svg</file>
+        <file alias="bold.svg">icons/bold.svg</file>
+        <file alias="bulletlist.svg">icons/bulletlist.svg</file>
+        <file alias="code.svg">icons/code.svg</file>
+        <file alias="codeblock.svg">icons/codeblock.svg</file>
+        <file alias="codemode.svg">icons/codemode.svg</file>
+        <file alias="copy.svg">icons/copy.svg</file>
+        <file alias="cut.svg">icons/cut.svg</file>
+        <file alias="darkmode.svg">icons/darkmode.svg</file>
+        <file alias="exporthtml.svg">icons/exporthtml.svg</file>
+        <file alias="exportpdf.svg">icons/exportpdf.svg</file>
+        <file alias="find.svg">icons/find.svg</file>
+        <file alias="focusmode.svg">icons/focusmode.svg</file>
+        <file alias="folder.svg">icons/folder.svg</file>
+        <file alias="fullscreen.svg">icons/fullscreen.svg</file>
+        <file alias="heading1.svg">icons/heading1.svg</file>
+        <file alias="heading2.svg">icons/heading2.svg</file>
+        <file alias="heading3.svg">icons/heading3.svg</file>
+        <file alias="horizontalrule.svg">icons/horizontalrule.svg</file>
+        <file alias="image.svg">icons/image.svg</file>
+        <file alias="italic.svg">icons/italic.svg</file>
+        <file alias="link.svg">icons/link.svg</file>
+        <file alias="new.svg">icons/new.svg</file>
+        <file alias="numberedlist.svg">icons/numberedlist.svg</file>
+        <file alias="open.svg">icons/open.svg</file>
+        <file alias="outline.svg">icons/outline.svg</file>
+        <file alias="paste.svg">icons/paste.svg</file>
+        <file alias="preview.svg">icons/preview.svg</file>
+        <file alias="previewonly.svg">icons/previewonly.svg</file>
+        <file alias="redo.svg">icons/redo.svg</file>
+        <file alias="replace.svg">icons/replace.svg</file>
+        <file alias="save.svg">icons/save.svg</file>
+        <file alias="sidebar.svg">icons/sidebar.svg</file>
+        <file alias="strikethrough.svg">icons/strikethrough.svg</file>
+        <file alias="table.svg">icons/table.svg</file>
+        <file alias="undo.svg">icons/undo.svg</file>
+        <file alias="zoomin.svg">icons/zoomin.svg</file>
+        <file alias="zoomout.svg">icons/zoomout.svg</file>
+        <file alias="zoomreset.svg">icons/zoomreset.svg</file>
+    </qresource>
+</RCC>
