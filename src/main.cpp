@@ -17,6 +17,10 @@
 #include <QStringConverter>
 #include <QPrinter>
 #include <QTextDocument>
+#include <QStandardPaths>
+#include <QDir>
+#include <QDateTime>
+#include <QMessageBox>
 
 /**
  * 把内置 SVG 渲染成多尺寸 PNG 并拼成 ICO。
@@ -120,9 +124,51 @@ static bool exportAppIcon(const QString &outPath, QString *err)
     return true;
 }
 
+/**
+ * 启动参数诊断。
+ *
+ * 「双击 .md 后编辑器是空的」这类问题，最难定位的就是
+ * shell 到底把什么传进来了 —— 双击、命令行、拖拽、脚本启动
+ * 四条路径的传参方式各不相同，光看代码猜不出来。
+ *
+ * 这里在「带了参数启动」时把收到的原始参数与当前工作目录
+ * 追加写到 %TEMP%\MarkdownEditor-startup.log，
+ * 不带参数启动（最常见的情况）则什么都不写。
+ *
+ * 日志只追加、不清理，多次双击会形成时间线，便于对比。
+ */
+static void logStartupArgs(int argc, char *argv[])
+{
+    if (argc <= 1) {
+        return;
+    }
+
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    if (dir.isEmpty()) {
+        return;
+    }
+
+    QFile f(QDir(dir).filePath(QStringLiteral("MarkdownEditor-startup.log")));
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        return;
+    }
+
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+    out << "---- " << QDateTime::currentDateTime().toString(Qt::ISODate) << "\n";
+    out << "argc=" << argc << "\n";
+    for (int i = 0; i < argc; ++i) {
+        out << "  argv[" << i << "]=" << QString::fromLocal8Bit(argv[i]) << "\n";
+    }
+    out << "cwd=" << QDir::currentPath() << "\n";
+    out.flush();
+    f.close();
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    logStartupArgs(argc, argv);
     app.setApplicationName("Markdown Editor");
     app.setApplicationDisplayName("Markdown Editor");
     app.setApplicationVersion("1.0.0");
@@ -447,11 +493,32 @@ int main(int argc, char *argv[])
     }
 
     // 打开命令行指定的文件
+    //
+    // 双击 .md 走的就是这条路。这里原来是「静默」的：
+    // 参数没解析出文件、或文件不存在时，什么都不说，
+    // 用户看到的就是一个空的「未命名」编辑器，没有任何线索。
+    //
+    // 现在把相对路径也按当前工作目录兜底解析，
+    // 并在打不开时给出明确提示。
     const QStringList args = parser.positionalArguments();
     if (!args.isEmpty()) {
-        QFileInfo info(args.first());
+        const QString rawPath = args.first();
+        QFileInfo info(rawPath);
+        // shell 传来的必然是绝对路径；相对路径按 CWD 解析，
+        // 覆盖从终端用相对路径启动的情况。
+        if (!info.isAbsolute() && !info.exists()) {
+            const QString resolved = QDir::currentPath() + QLatin1Char('/') + rawPath;
+            if (QFileInfo::exists(resolved)) {
+                info = QFileInfo(resolved);
+            }
+        }
         if (info.exists() && info.isFile()) {
             w.openFileAtStartup(info.absoluteFilePath());
+        } else {
+            qWarning("无法打开启动参数指定的文件: %s (cwd=%s)",
+                     qPrintable(rawPath), qPrintable(QDir::currentPath()));
+            QMessageBox::warning(&w, QObject::tr("无法打开文件"),
+                                 QObject::tr("无法打开文件：\n%1").arg(rawPath));
         }
     }
 
