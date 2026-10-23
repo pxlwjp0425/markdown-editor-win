@@ -42,8 +42,11 @@ public:
     void applyTheme(const QString &themeId);
 
 signals:
-    // 用户点击大纲条目，请求跳转到某一行
+    // 用户点击大纲条目，请求跳转到某一行（用于移动编辑器光标）
     void navigateToLine(int line);
+
+    // 用户点击大纲条目，请求滚动预览到对应锚点（用于预览 / 预览专属模式）
+    void navigateToAnchor(const QString &anchor);
 
     // 大纲内容变化
     void outlineChanged(int count);

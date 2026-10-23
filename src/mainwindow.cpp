@@ -115,6 +115,9 @@ MainWindow::MainWindow(QWidget *parent)
     // 大纲面板导航
     connect(m_outlinePanel, &OutlinePanel::navigateToLine,
             this, &MainWindow::onOutlineNavigate);
+    // 大纲点击同时滚动预览到对应标题（解决「点击大纲不跳转 / 预览专属模式看不到跳转」）
+    connect(m_outlinePanel, &OutlinePanel::navigateToAnchor,
+            this, &MainWindow::onOutlineAnchorNavigate);
     
     // 预览区：处理 [TOC] 锚点点击与任务列表勾选
     connect(m_preview, &QTextBrowser::anchorClicked,
@@ -935,10 +938,6 @@ void MainWindow::createDockWidgets()
     
     m_sidebarTabs->addTab(m_fileTree, tr("文件树"));
     
-    // 大纲面板（对应 Typora 的 Outline）
-    m_outlinePanel = new OutlinePanel(m_sidebarTabs);
-    m_sidebarTabs->addTab(m_outlinePanel, tr("大纲"));
-    
     // 文档树（对应 Typora 的「文档树」）：列出已打开的文档
     m_docTree = new QTreeWidget(m_sidebarTabs);
     m_docTree->setHeaderHidden(true);
@@ -952,14 +951,28 @@ void MainWindow::createDockWidgets()
     });
     m_sidebarTabs->addTab(m_docTree, tr("文档树"));
     
-    // 默认激活「大纲」页（与 Typora 一致：大纲比文件树更常用）
-    m_sidebarTabs->setCurrentWidget(m_outlinePanel);
+    // 默认激活「文件树」页（大纲已独立成右侧 dock，见下方）
+    m_sidebarTabs->setCurrentWidget(m_fileTree);
     
     fileTreeDock->setWidget(m_sidebarTabs);
     addDockWidget(Qt::LeftDockWidgetArea, fileTreeDock);
     
     // 记录 dock 以便切换显隐
     m_fileTreeDock = fileTreeDock;
+
+    // ---- 大纲面板：独立 dock（右侧）----
+    // 与左侧侧边栏（文件树 / 文档树）解耦，这样在「预览专属模式」「专注模式」里
+    // 也能独立显示与开关，且只控制该 dock，中央「编辑器 | 预览」分割器完全不触碰
+    // —— 开关大纲时预览渲染效果不变（只是右侧 dock 腾出 / 收回空间）。
+    // 缺省开（m_toggleOutlineAction 默认勾选、dock 默认可见）。
+    m_outlinePanel = new OutlinePanel(this);
+    m_outlineDock = new QDockWidget(tr("大纲"), this);
+    m_outlineDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    m_outlineDock->setWidget(m_outlinePanel);
+    m_outlineDock->setVisible(true);
+    addDockWidget(Qt::RightDockWidgetArea, m_outlineDock);
+    m_outlineDock->setMinimumWidth(180);
+    resizeDocks({m_outlineDock}, {240}, Qt::Horizontal);
 
     // 侧边栏宽度：QDockWidget 默认按内部 widget 的 sizeHint 定宽，
     // 换成 QPlainTextEdit 后中央区（splitter）的 sizeHint 变化会把它挤窄，
@@ -1433,14 +1446,6 @@ void MainWindow::toggleSidebar()
     }
     
     m_toggleSidebarAction->setChecked(m_sidebarVisible);
-
-    // 侧边栏整体显隐会带动大纲页，同步勾选态
-    if (m_toggleOutlineAction) {
-        const int idx = m_sidebarTabs ? m_sidebarTabs->indexOf(m_outlinePanel) : -1;
-        m_toggleOutlineAction->setChecked(m_sidebarVisible
-                                         && m_sidebarTabs
-                                         && m_sidebarTabs->currentIndex() == idx);
-    }
 }
 
 void MainWindow::toggleFullscreen()
@@ -1576,6 +1581,10 @@ void MainWindow::setFocusMode(bool enabled)
         if (m_fileTreeDock) {
             m_fileTreeDock->setVisible(false);
         }
+        // 隐藏独立大纲 dock（专注模式下一并收起）
+        if (m_outlineDock) {
+            m_outlineDock->setVisible(false);
+        }
         
         // 隐藏预览
         m_preview->setVisible(false);
@@ -1590,6 +1599,10 @@ void MainWindow::setFocusMode(bool enabled)
         // 恢复侧边栏
         if (m_fileTreeDock) {
             m_fileTreeDock->setVisible(m_sidebarVisible);
+        }
+        // 恢复大纲 dock（按大纲开关的勾选态）
+        if (m_outlineDock) {
+            m_outlineDock->setVisible(m_toggleOutlineAction->isChecked());
         }
         
         // 恢复预览
@@ -2157,27 +2170,12 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
  */
 void MainWindow::toggleOutline(bool checked)
 {
-    if (!m_sidebarTabs || !m_fileTreeDock) {
+    if (!m_outlineDock) {
         return;
     }
-    const int idx = m_sidebarTabs->indexOf(m_outlinePanel);
-    if (idx < 0) {
-        return;
-    }
-
-    // 大纲是侧边栏里的一个标签页。这里只控制「大纲是否可见」：
-    //   - 勾选：切到大纲页 + 显示侧边栏
-    //   - 取消勾选：隐藏侧边栏（含大纲）
-    // 只动左侧 dock，中央的「编辑器 | 预览」分割器完全不受影响，
-    // 因此预览的渲染效果不会因为开关大纲而变差（只是侧边栏腾出/收回空间）。
-    if (checked) {
-        m_sidebarTabs->setCurrentIndex(idx);
-        m_fileTreeDock->setVisible(true);
-        m_sidebarVisible = true;
-    } else {
-        m_fileTreeDock->setVisible(false);
-        m_sidebarVisible = false;
-    }
+    // 大纲现在是独立的右侧 dock：勾选=显示，取消=隐藏。
+    // 只动该 dock，中央「编辑器 | 预览」分割器完全不触碰，预览渲染不受影响。
+    m_outlineDock->setVisible(checked);
     m_toggleOutlineAction->setChecked(checked);
 }
 
@@ -2314,6 +2312,16 @@ void MainWindow::onOutlineNavigate(int line)
     editor->setTextCursor(cursor);
     editor->setFocus();
     editor->ensureCursorVisible();
+}
+
+void MainWindow::onOutlineAnchorNavigate(const QString &anchor)
+{
+    if (!m_preview || anchor.isEmpty()) {
+        return;
+    }
+    // 预览区标题都带有 id="<anchor>"，scrollToAnchor 可直接定位，
+    // 这样即使编辑器被隐藏（预览专属模式）也能在预览里跳转。
+    m_preview->scrollToAnchor(anchor);
 }
 
 /**
@@ -2711,10 +2719,8 @@ void MainWindow::setSidebarTab(int index)
         m_fileTreeDock->setVisible(true);
     }
 
-    // 同步勾选状态
-    const int outlineIdx = m_sidebarTabs ? m_sidebarTabs->indexOf(m_outlinePanel) : -1;
-    m_toggleOutlineAction->setChecked(index == outlineIdx && m_sidebarVisible);
-    m_docTreeAction->setChecked(index == 2);
+    // 同步勾选状态（大纲已独立成 dock，这里只同步文件树 / 文档树页）
+    m_docTreeAction->setChecked(index == 1);
     m_fileTreeAction->setChecked(index == 0);
 }
 

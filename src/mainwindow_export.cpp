@@ -21,6 +21,18 @@
 #include <QTextStream>
 #include <QTextDocumentWriter>
 
+/**
+ * 导出用：如果正文没有手写 [TOC]，自动在开头插入一个目录，
+ * 让导出的 PDF / HTML 带可点击的章节导航（标题锚点由渲染器统一生成）。
+ */
+static QString withAutoToc(const QString &markdown)
+{
+    if (markdown.contains(QLatin1String("[TOC]"), Qt::CaseInsensitive)) {
+        return markdown;
+    }
+    return QStringLiteral("[TOC]\n\n") + markdown;
+}
+
 void MainWindow::exportToHtml()
 {
     QPlainTextEdit *editor = currentEditor();
@@ -69,7 +81,7 @@ void MainWindow::exportToPdf()
         printer.setOutputFileName(fileName);
         
         QTextDocument doc;
-        doc.setHtml(generateHtml(currentEditor()->toPlainText()));
+        doc.setHtml(generateHtml(withAutoToc(currentEditor()->toPlainText())));
         doc.print(&printer);
         
         statusBar()->showMessage(tr("PDF 已导出"), 2000);
@@ -166,7 +178,7 @@ void MainWindow::exportToPdfFile(const QString &fileName)
     printer.setPageMargins(QMarginsF(20, 20, 20, 20), QPageLayout::Millimeter);
 
     QTextDocument doc;
-    doc.setHtml(generateHtml(editor->toPlainText()));
+    doc.setHtml(generateHtml(withAutoToc(editor->toPlainText())));
     doc.print(&printer);
 
     const QFileInfo fi(fileName);

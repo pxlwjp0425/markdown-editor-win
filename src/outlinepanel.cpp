@@ -213,6 +213,10 @@ void OutlinePanel::onItemClicked(QTreeWidgetItem *item, int column)
     if (line >= 0) {
         emit navigateToLine(line);
     }
+    const QString anchor = m_itemAnchors.value(item);
+    if (!anchor.isEmpty()) {
+        emit navigateToAnchor(anchor);
+    }
 }
 
 void OutlinePanel::onItemActivated(QTreeWidgetItem *item, int column)

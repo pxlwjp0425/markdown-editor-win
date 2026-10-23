@@ -24,7 +24,7 @@ KEY_MAP = {
     '菜单_帮助': 'menu_help',
     '侧边栏页签数': 'sidebar_tabs',
     '页签_文件树': 'tab_filetree',
-    '页签_大纲': 'tab_outline',
+    '大纲dock可见': 'outline_dock',
     '页签_文档树': 'tab_doctree',
     '快捷键_标题1': 'sc_h1',
     '快捷键_段落': 'sc_paragraph',

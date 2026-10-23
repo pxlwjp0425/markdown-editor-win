@@ -134,18 +134,22 @@ QString MainWindow::selfTestTyporaUi()
     }
     Q_UNUSED(menus);
 
-    // ---------------- 侧边栏页签 ----------------
+    // ---------------- 侧边栏页签（独立大纲 dock 已移出，这里只剩文件树 + 文档树）----------------
     add(QStringLiteral("sidebar_tabs"),
         m_sidebarTabs ? QString::number(m_sidebarTabs->count()) : QStringLiteral("0"));
     if (m_sidebarTabs) {
-        // 页签索引 -> ASCII key：0=文件树 1=大纲 2=文档树
+        // 页签索引 -> ASCII key：0=文件树 1=文档树
         const QStringList tabKeys = {QStringLiteral("filetree"),
-                                    QStringLiteral("outline"),
                                     QStringLiteral("doctree")};
         for (int i = 0; i < m_sidebarTabs->count() && i < tabKeys.size(); ++i) {
             add(QStringLiteral("tab_") + tabKeys.at(i), QStringLiteral("1"));
         }
     }
+    // 独立大纲 dock（缺省开）
+    // 注意：headless 自检时主窗口未 show，dock 的 isVisible() 不可靠，
+    // 改用大纲开关的勾选态（缺省勾选）来反映「缺省开」。
+    add(QStringLiteral("outline_dock"),
+        (m_toggleOutlineAction && m_toggleOutlineAction->isChecked()) ? QStringLiteral("1") : QStringLiteral("0"));
 
     // ---------------- 快捷键 ----------------
     auto sc = [](QAction *a) {

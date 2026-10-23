@@ -180,6 +180,7 @@ private slots:
     void setPreviewOnlyMode(bool enabled);
     void setSourceMode(bool enabled);
     void onOutlineNavigate(int line);
+    void onOutlineAnchorNavigate(const QString &anchor);
     void onPreviewAnchorClicked(const QUrl &url);
     void onEditorCursorMoved();
     void onSmartPunctuationToggled(bool enabled);

@@ -60,10 +60,10 @@ CHECKS = [
     ('menu_theme', '1'),
     ('menu_help', '1'),
     # 侧边栏
-    ('sidebar_tabs', '3'),
+    ('sidebar_tabs', '2'),
     ('tab_filetree', '1'),
-    ('tab_outline', '1'),
     ('tab_doctree', '1'),
+    ('outline_dock', '1'),
     # 快捷键对齐（Typora 语义，字符串为 Qt 的 toString() 形式）
     ('sc_h1', 'Ctrl+1'),
     ('sc_paragraph', 'Ctrl+0'),
