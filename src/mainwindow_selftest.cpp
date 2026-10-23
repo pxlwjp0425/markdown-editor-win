@@ -19,6 +19,7 @@
 #include <QTemporaryDir>
 #include <QPlainTextEdit>
 #include <QTabWidget>
+#include <QTabBar>
 
 QString MainWindow::renderMarkdownToHtml(const QString &markdown)
 {
@@ -490,5 +491,57 @@ QString MainWindow::selfTestMerge()
         merged2.indexOf(QStringLiteral("正文A")) < merged2.indexOf(QStringLiteral("正文B"))
             ? QStringLiteral("1") : QStringLiteral("0"));
 
+    return out.join('\n');
+}
+
+QString MainWindow::selfTestTabs()
+{
+    QStringList out;
+    auto add = [&](const QString &k, const QString &v) {
+        out << (k + QStringLiteral("=") + v);
+    };
+
+    QTemporaryDir dir;
+    if (!dir.isValid()) {
+        add(QStringLiteral("tabs_dir"), QStringLiteral("FAIL"));
+        return out.join('\n');
+    }
+    const QString pa = dir.filePath(QStringLiteral("a.md"));
+    const QString pb = dir.filePath(QStringLiteral("b.md"));
+    auto writeOne = [](const QString &p, const QString &c) {
+        QFile f(p);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            return false;
+        }
+        QTextStream s(&f);
+        s.setEncoding(QStringConverter::Utf8);
+        s << c;
+        f.close();
+        return true;
+    };
+    writeOne(pa, QStringLiteral("# A\n\n内容A"));
+    writeOne(pb, QStringLiteral("# B\n\n内容B"));
+
+    openFile(pa);
+    openFile(pb);
+
+    add(QStringLiteral("tab_count"), QString::number(m_editorTabs->count()));
+    // 必须 show() 后 isVisible() 才可靠（未显示的窗口其子控件 isVisible() 恒为 false）
+    show();
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    add(QStringLiteral("tabBar_visible"),
+        (m_editorTabs->tabBar() && m_editorTabs->tabBar()->isVisible())
+            ? QStringLiteral("1") : QStringLiteral("0"));
+    add(QStringLiteral("tabBar_height"),
+        m_editorTabs->tabBar()
+            ? QString::number(m_editorTabs->tabBar()->height())
+            : QStringLiteral("-1"));
+    add(QStringLiteral("editorTabs_visible"),
+        m_editorTabs->isVisible() ? QStringLiteral("1") : QStringLiteral("0"));
+    for (int i = 0; i < m_editorTabs->count(); ++i) {
+        add(QStringLiteral("tab%1").arg(i), m_editorTabs->tabText(i));
+    }
     return out.join('\n');
 }

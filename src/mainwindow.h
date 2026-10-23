@@ -75,6 +75,9 @@ public:
     // 自检：端到端验证「合并 Markdown」：对话框收集文件 -> 合并 -> 新标签
     QString selfTestMerge();
 
+    // 自检：验证「打开多个文件会生成多个可切换的标签」
+    QString selfTestTabs();
+
     // 应用指定主题（供命令行 --theme 参数调用）
     void applyThemeById(const QString &themeId);
 

@@ -1103,15 +1103,17 @@ void MainWindow::openFileAtStartup(const QString &filePath)
 
 void MainWindow::openFile()
 {
-    QString fileName = QFileDialog::getOpenFileName(
+    // 允许多选：一次可选择多个文件，每个文件打开为一个独立标签页。
+    const QStringList files = QFileDialog::getOpenFileNames(
         this,
         tr("打开 Markdown 文件"),
         m_currentFolder,
         "Markdown Files (*.md *.markdown *.txt);;All Files (*)"
     );
-    
-    if (!fileName.isEmpty()) {
-        openFile(fileName);
+    for (const QString &fileName : files) {
+        if (!fileName.isEmpty()) {
+            openFile(fileName);
+        }
     }
 }
 
@@ -2081,6 +2083,8 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 void MainWindow::dropEvent(QDropEvent *event)
 {
     const QList<QUrl> urls = event->mimeData()->urls();
+    int opened = 0;
+    // 支持一次拖入多个文件：每个文件打开为一个独立标签页。
     for (const QUrl &url : urls) {
         if (url.isLocalFile()) {
             QString path = url.toLocalFile();
@@ -2088,10 +2092,13 @@ void MainWindow::dropEvent(QDropEvent *event)
             if (info.isFile() &&
                 (info.suffix() == "md" || info.suffix() == "markdown" || info.suffix() == "txt")) {
                 openFile(path);
-                event->acceptProposedAction();
-                return;
+                ++opened;
             }
         }
+    }
+    if (opened > 0) {
+        event->acceptProposedAction();
+        return;
     }
     QMainWindow::dropEvent(event);
 }

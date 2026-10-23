@@ -290,6 +290,12 @@ int main(int argc, char *argv[])
         "自检：端到端验证合并 Markdown（对话框 -> 合并 -> 新标签）");
     parser.addOption(selfTestMergeOption);
 
+    // 自检：打开多个文件是否生成多个可切换的标签
+    QCommandLineOption selfTestTabsOption(
+        QStringList() << "self-test-tabs",
+        "自检：验证打开多个文件会生成多个可切换的标签");
+    parser.addOption(selfTestTabsOption);
+
     // 无界面导出模式：用于自动化测试与脚本化转换
     QCommandLineOption exportOption(
         QStringList() << "export-html",
@@ -484,6 +490,15 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    // 自检：打开多个文件 -> 多个标签
+    if (parser.isSet(selfTestTabsOption)) {
+        QTextStream sout(stdout);
+        sout.setEncoding(QStringConverter::Utf8);
+        sout << w.selfTestTabs() << "\n";
+        sout.flush();
+        return 0;
+    }
+
     // 自检模式：合并 Markdown 端到端
     if (parser.isSet(selfTestMergeOption)) {
         QTextStream sout(stdout);
@@ -574,23 +589,30 @@ int main(int argc, char *argv[])
     // 并在打不开时给出明确提示。
     const QStringList args = parser.positionalArguments();
     if (!args.isEmpty()) {
-        const QString rawPath = args.first();
-        QFileInfo info(rawPath);
-        // shell 传来的必然是绝对路径；相对路径按 CWD 解析，
-        // 覆盖从终端用相对路径启动的情况。
-        if (!info.isAbsolute() && !info.exists()) {
-            const QString resolved = QDir::currentPath() + QLatin1Char('/') + rawPath;
-            if (QFileInfo::exists(resolved)) {
-                info = QFileInfo(resolved);
+        // 支持一次传入多个文件（如资源管理器多选「打开方式」），
+        // 每个文件打开为一个独立标签页。
+        int opened = 0;
+        for (const QString &rawPath : args) {
+            QFileInfo info(rawPath);
+            // shell 传来的必然是绝对路径；相对路径按 CWD 解析，
+            // 覆盖从终端用相对路径启动的情况。
+            if (!info.isAbsolute() && !info.exists()) {
+                const QString resolved = QDir::currentPath() + QLatin1Char('/') + rawPath;
+                if (QFileInfo::exists(resolved)) {
+                    info = QFileInfo(resolved);
+                }
+            }
+            if (info.exists() && info.isFile()) {
+                w.openFileAtStartup(info.absoluteFilePath());
+                ++opened;
+            } else {
+                qWarning("无法打开启动参数指定的文件: %s (cwd=%s)",
+                         qPrintable(rawPath), qPrintable(QDir::currentPath()));
             }
         }
-        if (info.exists() && info.isFile()) {
-            w.openFileAtStartup(info.absoluteFilePath());
-        } else {
-            qWarning("无法打开启动参数指定的文件: %s (cwd=%s)",
-                     qPrintable(rawPath), qPrintable(QDir::currentPath()));
+        if (opened == 0) {
             QMessageBox::warning(&w, QObject::tr("无法打开文件"),
-                                 QObject::tr("无法打开文件：\n%1").arg(rawPath));
+                                 QObject::tr("无法打开文件：\n%1").arg(args.first()));
         }
     }
 
