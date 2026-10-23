@@ -108,6 +108,30 @@ if os.path.exists(pdf):
           '含 CID 字体')
     # ToUnicode 映射（保证可复制文字）
     check('pdf ToUnicode', b'/ToUnicode' in raw)
+    # 侧边栏书签（/Outlines）：源文档带 ATX 标题时应当存在
+    check('pdf侧边栏书签', b'/Type /Outlines' in raw, '/Outlines 大纲')
+    # xref 完整性：startxref 指向 xref，且所有在用对象偏移都指向自身的 "N 0 obj"
+    ok_xref = True
+    try:
+        sx = int(re.search(rb'startxref\s+(\d+)', raw[raw.rfind(b'startxref'):]).group(1))
+        if raw[sx:sx + 4] != b'xref':
+            ok_xref = False
+        else:
+            head = re.match(rb'xref\r\n0 (\d+)\r\n', raw[sx:])
+            total = int(head.group(1))
+            pos = sx + head.end()
+            for n in range(total):
+                entry = raw[pos:pos + 20]
+                pos += 20
+                off = int(entry[0:10])
+                typ = entry[17:18]
+                if typ == b'n' and not raw[off:off + 40].lstrip().startswith(
+                        str(n).encode() + b' 0 obj'):
+                    ok_xref = False
+                    break
+    except Exception:
+        ok_xref = False
+    check('pdf xref完整', ok_xref, 'xref 与对象偏移一致')
     print('         （PDF 体积 %d KB）' % (len(raw) // 1024))
 else:
     check('pdf', False, '文件不存在')

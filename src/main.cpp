@@ -403,14 +403,14 @@ int main(int argc, char *argv[])
         }
         const QString html = w.renderMarkdownToHtml(markdown);
 
-        // QPrinter 的 PdfFormat 在 Windows 上是纯软件输出，不依赖已安装的打印机
-        QPrinter printer(QPrinter::HighResolution);
-        printer.setOutputFormat(QPrinter::PdfFormat);
-        printer.setOutputFileName(parser.value(exportPdfOption));
-
-        QTextDocument doc;
-        doc.setHtml(html);
-        doc.print(&printer);
+        // 复用与 GUI 一致的渲染（含 PDF 侧边栏书签注入）
+        const QByteArray pdf = w.renderPdfBytes(markdown);
+        QFile out(parser.value(exportPdfOption));
+        if (!out.open(QIODevice::WriteOnly) || out.write(pdf) != pdf.size()) {
+            qWarning("无法写入 PDF: %s", qPrintable(parser.value(exportPdfOption)));
+            return 4;
+        }
+        out.close();
         return 0;
     }
     

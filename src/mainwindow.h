@@ -88,6 +88,11 @@ public:
     // 将 Markdown 渲染为完整 HTML 页面（供无界面导出与测试使用）
     QString renderMarkdownToHtml(const QString &markdown);
 
+    // 把 markdown 渲染为带「PDF 侧边栏书签（/Outlines 大纲）」的 PDF 字节流。
+    // 内部：QTextDocument 打印到临时文件 -> 读回字节 -> 按文档布局算出每个标题的
+    // 页码与页内纵坐标 -> 注入 /Outlines。失败或无可注入标题时退回无书签 PDF。
+    QByteArray renderPdfBytes(const QString &markdown);
+
 protected:
     void closeEvent(QCloseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;

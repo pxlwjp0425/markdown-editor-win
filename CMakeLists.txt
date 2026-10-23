@@ -78,12 +78,14 @@ add_library(mdcore STATIC
     src/inlineformatter.cpp
     src/smartpunctuation.cpp
     src/mergecore.cpp
+    src/pdfoutline.cpp
     src/docmodel.h
     src/htmlrenderer.h
     src/blockeditor.h
     src/inlineformatter.h
     src/smartpunctuation.h
     src/mergecore.h
+    src/pdfoutline.h
 )
 target_include_directories(mdcore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(mdcore PUBLIC Qt6::Core)

@@ -7,6 +7,7 @@
 
 #include "mainwindow.h"
 #include "appicon.h"
+#include "pdfoutline.h"
 #include <QFile>
 #include <QFileDialog>
 #include <QMessageBox>
@@ -20,6 +21,14 @@
 #include <QImage>
 #include <QTextStream>
 #include <QTextDocumentWriter>
+#include <QTemporaryFile>
+#include <QTextBlock>
+#include <QTextFragment>
+#include <QTextFormat>
+#include <QAbstractTextDocumentLayout>
+#include <QRegularExpression>
+#include <QFont>
+#include <QtMath>
 
 /**
  * 导出用：如果正文没有手写 [TOC]，自动在开头插入一个目录，
@@ -31,6 +40,154 @@ static QString withAutoToc(const QString &markdown)
         return markdown;
     }
     return QStringLiteral("[TOC]\n\n") + markdown;
+}
+
+// ---- PDF 侧边栏书签支持 ----
+
+// 解析 markdown 标题，返回 (层级, 原始文本)
+static QVector<QPair<int, QString>> extractMdHeadings(const QString &md)
+{
+    QVector<QPair<int, QString>> res;
+    const QStringList lines = md.split(QLatin1Char('\n'));
+    for (const QString &line : lines) {
+        if (line.startsWith(QLatin1String("```"))) {
+            continue;  // 跳过围栏代码块
+        }
+        int h = 0;
+        while (h < line.size() && line.at(h) == QLatin1Char('#')) {
+            ++h;
+        }
+        if (h >= 1 && h <= 6) {
+            QString t = line.mid(h).trimmed();
+            while (t.endsWith(QLatin1Char('#')) && !t.isEmpty()) {
+                t.chop(1);
+            }
+            t = t.trimmed();
+            if (!t.isEmpty()) {
+                res.append(qMakePair(h, t));
+            }
+        }
+    }
+    return res;
+}
+
+// 去掉常见内联 markdown 标记，便于与渲染后的纯文本精确匹配
+static QString stripInlineMd(const QString &s)
+{
+    QString t = s;
+    t.replace(QRegularExpression("\\[([^\\]]*)\\]\\([^)]*\\)"), QStringLiteral("\\1"));
+    t.remove(QRegularExpression("(\\*\\*|__|\\*|`|_)"));
+    return t.trimmed();
+}
+
+QByteArray MainWindow::renderPdfBytes(const QString &markdown)
+{
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setPageSize(QPageSize(QPageSize::A4));
+    printer.setPageMargins(QMarginsF(20, 20, 20, 20), QPageLayout::Millimeter);
+
+    // QPrinter 的 PdfFormat 不直接接受 QBuffer，先输出到临时文件再读回字节。
+    QTemporaryFile tmp;
+    if (!tmp.open()) {
+        return QByteArray();
+    }
+    const QString tmpPath = tmp.fileName();
+    tmp.close();
+    printer.setOutputFileName(tmpPath);
+
+    const QString html = generateHtml(withAutoToc(markdown));
+    QTextDocument doc;
+    doc.setHtml(html);
+    // 用页面尺寸（点）布局，使文档坐标与 PDF 点一致（宽度决定换行/总高度）。
+    const QSizeF pageSize = printer.pageRect(QPrinter::Point).size();
+    doc.setPageSize(pageSize);
+
+    // 在打印之前采集：文档总高度 + 每个标题的纵向位置。
+    // 关键：打印后文档布局会被重置/塌缩，必须提前取坐标。
+    const double docTotalH = doc.size().height();
+
+    const auto headings = extractMdHeadings(markdown);
+    QVector<QPair<QString, double>> headingY;  // (干净标题, 文档内纵坐标)
+    if (!headings.isEmpty()) {
+        const QAbstractTextDocumentLayout *layout = doc.documentLayout();
+        // 真正的标题块用加粗字体（<hN> 默认 bold，weight≈700），
+        // 而自动 [TOC] 目录项（<a href> 里）和正文都是常规字重（≈400）。
+        // 用字重区分，避免匹配到顶部目录项（其文本与标题相同、都挤在顶部）。
+        auto blockIsHeading = [](const QTextBlock &b) {
+            for (auto it = b.begin(); !it.atEnd(); ++it) {
+                if (it.fragment().charFormat().fontWeight() >= QFont::DemiBold) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        int hi = 0;
+        QTextBlock block = doc.firstBlock();
+        while (block.isValid() && hi < headings.size()) {
+            if (block.textList() || !blockIsHeading(block)) {
+                block = block.next();
+                continue;
+            }
+            const QString blockText = block.text().trimmed();
+            if (!blockText.isEmpty()) {
+                const QString want = stripInlineMd(headings.at(hi).second);
+                const bool match = !want.isEmpty()
+                        && (blockText == want
+                            || (want.length() > 3 && blockText.contains(want)));
+                if (match) {
+                    headingY.append(qMakePair(want, layout->blockBoundingRect(block).top()));
+                    ++hi;
+                }
+            }
+            block = block.next();
+        }
+    }
+
+    // 打印到临时文件
+    doc.print(&printer);
+
+    QFile f(tmpPath);
+    if (!f.open(QIODevice::ReadOnly)) {
+        return QByteArray();
+    }
+    QByteArray pdf = f.readAll();
+    f.close();
+    QFile::remove(tmpPath);
+    if (pdf.isEmpty()) {
+        return pdf;
+    }
+
+    // 页数（以真实 PDF 为准，避免分页取整误差）
+    const QVector<int> pageObjNums = pdfPageObjectNumbers(pdf);
+    const int N = pageObjNums.size();
+    if (N <= 0) {
+        return pdf;  // 解析失败则退回无书签 PDF
+    }
+
+    // 用「相对纵向比例 × 页数」定位：与 DPI / 设备像素无关。
+    // 每个标题的全局纵向比例 frac ∈ [0,1)，乘以页数得到页位置，整数部分为页码，
+    // 小数部分为页内比例，再乘以可打印页高（点）即为页内纵坐标。
+    const double paperHpt = printer.paperRect(QPrinter::Point).height();
+    const double topMgnPt = printer.pageLayout().margins(QPageLayout::Point).top();
+    const double pageRectHpt = pageSize.height();
+
+    QVector<PdfOutlineEntry> entries;
+    entries.reserve(headingY.size());
+    for (const auto &hy : headingY) {
+        const double frac = (docTotalH > 0.0) ? (hy.second / docTotalH) : 0.0;
+        const double pos = frac * N;
+        const int pg = qBound(0, qFloor(pos), N - 1);
+        const double withinFrac = qBound(0.0, pos - pg, 1.0);
+        PdfOutlineEntry e;
+        e.title = hy.first;
+        e.pageIndex = pg;
+        e.y = paperHpt - topMgnPt - withinFrac * pageRectHpt;
+        entries.append(e);
+    }
+
+    return injectPdfOutline(pdf, entries, N);
 }
 
 void MainWindow::exportToHtml()
@@ -76,15 +233,15 @@ void MainWindow::exportToPdf()
     );
     
     if (!fileName.isEmpty()) {
-        QPrinter printer(QPrinter::HighResolution);
-        printer.setOutputFormat(QPrinter::PdfFormat);
-        printer.setOutputFileName(fileName);
-        
-        QTextDocument doc;
-        doc.setHtml(generateHtml(withAutoToc(currentEditor()->toPlainText())));
-        doc.print(&printer);
-        
-        statusBar()->showMessage(tr("PDF 已导出"), 2000);
+        const QByteArray bytes = renderPdfBytes(currentEditor()->toPlainText());
+        QFile file(fileName);
+        if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size()) {
+            QMessageBox::warning(this, tr("错误"),
+                                 tr("写入 PDF 失败：%1").arg(file.errorString()));
+            return;
+        }
+        file.close();
+        statusBar()->showMessage(tr("PDF 已导出（含侧边栏书签）"), 2000);
     }
 }
 
@@ -171,19 +328,18 @@ void MainWindow::exportToPdfFile(const QString &fileName)
         return;
     }
 
-    QPrinter printer(QPrinter::HighResolution);
-    printer.setOutputFormat(QPrinter::PdfFormat);
-    printer.setOutputFileName(fileName);
-    printer.setPageSize(QPageSize(QPageSize::A4));
-    printer.setPageMargins(QMarginsF(20, 20, 20, 20), QPageLayout::Millimeter);
-
-    QTextDocument doc;
-    doc.setHtml(generateHtml(withAutoToc(editor->toPlainText())));
-    doc.print(&printer);
+    const QByteArray bytes = renderPdfBytes(editor->toPlainText());
+    QFile file(fileName);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size()) {
+        QMessageBox::warning(this, tr("错误"),
+                             tr("写入 PDF 失败：%1").arg(file.errorString()));
+        return;
+    }
+    file.close();
 
     const QFileInfo fi(fileName);
     statusBar()->showMessage(
-        tr("已导出 PDF（%1 KB）").arg(fi.size() / 1024), 3000);
+        tr("已导出 PDF（%1 KB，含侧边栏书签）").arg(fi.size() / 1024), 3000);
 }
 
 void MainWindow::exportToOdtFile(const QString &fileName)
