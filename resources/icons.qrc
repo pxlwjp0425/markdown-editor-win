@@ -25,6 +25,7 @@
         <file alias="image.svg">icons/image.svg</file>
         <file alias="italic.svg">icons/italic.svg</file>
         <file alias="link.svg">icons/link.svg</file>
+        <file alias="merge.svg">icons/merge.svg</file>
         <file alias="new.svg">icons/new.svg</file>
         <file alias="numberedlist.svg">icons/numberedlist.svg</file>
         <file alias="open.svg">icons/open.svg</file>

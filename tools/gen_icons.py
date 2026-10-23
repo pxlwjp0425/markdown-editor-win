@@ -39,6 +39,12 @@ ICONS = {
 
     "folder": '<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>\n',
 
+    "merge": '<circle cx="6" cy="6" r="2.5"/>\n'
+             '<circle cx="6" cy="18" r="2.5"/>\n'
+             '<circle cx="18" cy="12" r="2.5"/>\n'
+             '<path d="M8.5 7l7 3.5"/>\n'
+             '<path d="M8.5 17l7-3.5"/>\n',
+
     "save": '<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>\n'
             '<path d="M8 3v6h7V3"/>\n'
             '<rect x="8" y="13" width="8" height="8" rx="1"/>\n',

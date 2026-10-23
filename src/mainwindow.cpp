@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "appicon.h"
+#include "mergedialog.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QScrollBar>
@@ -200,6 +201,10 @@ void MainWindow::createActions()
     m_openFolderAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
     m_openFolderAction->setStatusTip(tr("打开文件夹"));
     connect(m_openFolderAction, &QAction::triggered, this, &MainWindow::openFolder);
+
+    m_mergeAction = new QAction(QIcon(":/icons/merge.svg"), tr("合并 Markdown..."), this);
+    m_mergeAction->setStatusTip(tr("将多个 Markdown 文件合并为一个"));
+    connect(m_mergeAction, &QAction::triggered, this, &MainWindow::mergeMarkdown);
     
     m_saveAction = new QAction(QIcon(":/icons/save.svg"), tr("保存"), this);
     m_saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
@@ -575,7 +580,11 @@ void MainWindow::createActions()
     // ================= Typora 对齐：视图菜单 =================
     m_outlineAction = new QAction(tr("大纲"), this);
     m_outlineAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_1));
-    connect(m_outlineAction, &QAction::triggered, this, [this]() { setSidebarTab(1); });
+    // Ctrl+Shift+1 作为大纲开关的快捷方式：按当前勾选态翻转。
+    // （真正独立的勾选开关是 m_toggleOutlineAction，见下方。）
+    connect(m_outlineAction, &QAction::triggered, this, [this]() {
+        toggleOutline(!m_toggleOutlineAction->isChecked());
+    });
 
     m_docTreeAction = new QAction(tr("文档树"), this);
     m_docTreeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_2));
@@ -648,6 +657,7 @@ void MainWindow::createMenus()
     fileMenu->addAction(m_newWindowAction);
     fileMenu->addAction(m_openAction);
     fileMenu->addAction(m_openFolderAction);
+    fileMenu->addAction(m_mergeAction);
     fileMenu->addSeparator();
     fileMenu->addAction(m_saveAction);
     fileMenu->addAction(m_saveAsAction);
@@ -776,7 +786,7 @@ void MainWindow::createMenus()
     QMenu *viewMenu = menuBar()->addMenu(tr("视图(&V)"));
     viewMenu->addAction(m_toggleSidebarAction);
     viewMenu->addSeparator();
-    viewMenu->addAction(m_outlineAction);
+    viewMenu->addAction(m_toggleOutlineAction);
     viewMenu->addAction(m_docTreeAction);
     viewMenu->addAction(m_fileTreeAction);
     viewMenu->addSeparator();
@@ -1185,6 +1195,45 @@ void MainWindow::openFolder()
     }
 }
 
+void MainWindow::mergeMarkdown()
+{
+    MergeDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const QString text = dlg.mergedText();
+    openMergedContent(text);
+
+    // 「合并并保存」：开新标签后立刻弹出保存对话框
+    if (dlg.saveRequested()) {
+        saveFileAs();
+    }
+}
+
+void MainWindow::openMergedContent(const QString &text)
+{
+    // 复用启动时的空白「未命名」标签（与 openFile 的复用逻辑一致），
+    // 避免每合并一次就多留一个空标签。
+    QPlainTextEdit *cur = currentEditor();
+    const bool reusable = cur
+            && cur->property("filePath").toString().isEmpty()
+            && cur->toPlainText().trimmed().isEmpty();
+    if (!reusable) {
+        newFile();
+    }
+    QPlainTextEdit *editor = currentEditor();
+    editor->setPlainText(text);
+    editor->setProperty("filePath", QString());
+    // 合并结果是新内容、尚未落盘，标记为已修改以提示保存
+    editor->setProperty("modified", true);
+    m_editorTabs->setTabText(m_editorTabs->currentIndex(), tr("合并结果"));
+
+    refreshOutline();
+    updatePreview();
+    updateWindowTitle();
+}
+
 bool MainWindow::saveCurrentTab()
 {
     QPlainTextEdit *editor = currentEditor();
@@ -1384,6 +1433,14 @@ void MainWindow::toggleSidebar()
     }
     
     m_toggleSidebarAction->setChecked(m_sidebarVisible);
+
+    // 侧边栏整体显隐会带动大纲页，同步勾选态
+    if (m_toggleOutlineAction) {
+        const int idx = m_sidebarTabs ? m_sidebarTabs->indexOf(m_outlinePanel) : -1;
+        m_toggleOutlineAction->setChecked(m_sidebarVisible
+                                         && m_sidebarTabs
+                                         && m_sidebarTabs->currentIndex() == idx);
+    }
 }
 
 void MainWindow::toggleFullscreen()
@@ -2098,9 +2155,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
  * 若当前不在大纲页则切到大纲页；若已在大纲页则折叠/展开侧边栏。
  * 单独预览模式下只切页签，不动侧边栏显隐（预览模式已整体隐藏侧边栏）。
  */
-void MainWindow::toggleOutline()
+void MainWindow::toggleOutline(bool checked)
 {
-    if (!m_sidebarTabs) {
+    if (!m_sidebarTabs || !m_fileTreeDock) {
         return;
     }
     const int idx = m_sidebarTabs->indexOf(m_outlinePanel);
@@ -2108,20 +2165,20 @@ void MainWindow::toggleOutline()
         return;
     }
 
-    if (m_sidebarTabs->currentIndex() != idx) {
-        // 切到大纲页，并确保侧边栏可见
+    // 大纲是侧边栏里的一个标签页。这里只控制「大纲是否可见」：
+    //   - 勾选：切到大纲页 + 显示侧边栏
+    //   - 取消勾选：隐藏侧边栏（含大纲）
+    // 只动左侧 dock，中央的「编辑器 | 预览」分割器完全不受影响，
+    // 因此预览的渲染效果不会因为开关大纲而变差（只是侧边栏腾出/收回空间）。
+    if (checked) {
         m_sidebarTabs->setCurrentIndex(idx);
-        if (m_fileTreeDock && m_sidebarVisible) {
-            m_fileTreeDock->setVisible(true);
-        }
-        m_toggleOutlineAction->setChecked(true);
+        m_fileTreeDock->setVisible(true);
+        m_sidebarVisible = true;
     } else {
-        // 已在大纲页：折叠/展开侧边栏
-        const bool nowVisible = !m_fileTreeDock->isVisible();
-        m_fileTreeDock->setVisible(nowVisible);
-        m_sidebarVisible = nowVisible;
-        m_toggleOutlineAction->setChecked(nowVisible);
+        m_fileTreeDock->setVisible(false);
+        m_sidebarVisible = false;
     }
+    m_toggleOutlineAction->setChecked(checked);
 }
 
 /**
@@ -2655,7 +2712,8 @@ void MainWindow::setSidebarTab(int index)
     }
 
     // 同步勾选状态
-    m_outlineAction->setChecked(index == 1);
+    const int outlineIdx = m_sidebarTabs ? m_sidebarTabs->indexOf(m_outlinePanel) : -1;
+    m_toggleOutlineAction->setChecked(index == outlineIdx && m_sidebarVisible);
     m_docTreeAction->setChecked(index == 2);
     m_fileTreeAction->setChecked(index == 0);
 }

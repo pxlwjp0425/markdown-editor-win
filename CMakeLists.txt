@@ -48,6 +48,7 @@ set(SOURCES
     src/exporter.cpp
     src/exporter_office.cpp
     src/zipwriter.cpp
+    src/mergedialog.cpp
 )
 
 set(HEADERS
@@ -59,6 +60,7 @@ set(HEADERS
     src/outlinepanel.h
     src/exporter.h
     src/zipwriter.h
+    src/mergedialog.h
 )
 
 # ---------------------------------------------------------------------------
@@ -75,11 +77,13 @@ add_library(mdcore STATIC
     src/blockeditor.cpp
     src/inlineformatter.cpp
     src/smartpunctuation.cpp
+    src/mergecore.cpp
     src/docmodel.h
     src/htmlrenderer.h
     src/blockeditor.h
     src/inlineformatter.h
     src/smartpunctuation.h
+    src/mergecore.h
 )
 target_include_directories(mdcore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(mdcore PUBLIC Qt6::Core)

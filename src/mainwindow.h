@@ -72,6 +72,9 @@ public:
     // 自检：把所有导出格式写到指定目录，返回 KEY=VALUE 报告
     QStringList selfTestExportAll(const QString &outDir);
 
+    // 自检：端到端验证「合并 Markdown」：对话框收集文件 -> 合并 -> 新标签
+    QString selfTestMerge();
+
     // 应用指定主题（供命令行 --theme 参数调用）
     void applyThemeById(const QString &themeId);
 
@@ -99,6 +102,8 @@ private slots:
     void openFile();
     void openFile(const QString &filePath);
     void openFolder();
+    void mergeMarkdown();
+    void openMergedContent(const QString &text);
     void saveFile();
     bool saveFileAs();
     void closeTab(int index);
@@ -170,7 +175,7 @@ private slots:
     
     // 视图操作
     void togglePreview();
-    void toggleOutline();
+    void toggleOutline(bool checked);
     void toggleSourceMode();
     void setPreviewOnlyMode(bool enabled);
     void setSourceMode(bool enabled);
@@ -345,6 +350,7 @@ private:
     QAction *m_newAction;
     QAction *m_openAction;
     QAction *m_openFolderAction;
+    QAction *m_mergeAction;
     QAction *m_saveAction;
     QAction *m_saveAsAction;
     QAction *m_closeTabAction;

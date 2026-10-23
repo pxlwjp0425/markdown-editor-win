@@ -7,13 +7,18 @@
  */
 
 #include "mainwindow.h"
+#include "mergedialog.h"
 #include <QFile>
+#include <QFileInfo>
 #include <QDir>
 #include <QTextStream>
 #include <QStandardPaths>
 #include <QDateTime>
 #include <QStringConverter>
 #include <QTextDocumentWriter>
+#include <QTemporaryDir>
+#include <QPlainTextEdit>
+#include <QTabWidget>
 
 QString MainWindow::renderMarkdownToHtml(const QString &markdown)
 {
@@ -404,4 +409,82 @@ QStringList MainWindow::selfTestExportAll(const QString &outDir)
     }
 
     return report;
+}
+
+QString MainWindow::selfTestMerge()
+{
+    QStringList out;
+    auto add = [&](const QString &k, const QString &v) {
+        out << (k + QStringLiteral("=") + v);
+    };
+
+    // 1) 准备两个临时 .md 文件
+    QTemporaryDir dir;
+    if (!dir.isValid()) {
+        add(QStringLiteral("merge_dir"), QStringLiteral("FAIL"));
+        return out.join('\n');
+    }
+    const QString pa = dir.filePath(QStringLiteral("a.md"));
+    const QString pb = dir.filePath(QStringLiteral("b.md"));
+    auto writeOne = [](const QString &p, const QString &c) {
+        QFile f(p);
+        if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            return false;
+        }
+        QTextStream s(&f);
+        s.setEncoding(QStringConverter::Utf8);
+        s << c;
+        f.close();
+        return true;
+    };
+    const bool w1 = writeOne(pa, QStringLiteral("# A\n\n正文A"));
+    const bool w2 = writeOne(pb, QStringLiteral("# B\n\n正文B"));
+    add(QStringLiteral("merge_write"), (w1 && w2) ? QStringLiteral("OK") : QStringLiteral("FAIL"));
+
+    // 2) 对话框：按 b、a 手动顺序添加，关闭标题插入
+    MergeDialog dlg(this);
+    dlg.addPaths(QStringList() << pb << pa);
+    if (QCheckBox *cb = dlg.findChild<QCheckBox *>()) {
+        cb->setChecked(false);
+    }
+    dlg.doMerge(false);
+    const QString merged = dlg.mergedText();
+    add(QStringLiteral("merge_dialog_ok"),
+        (merged.contains(QStringLiteral("正文A")) && merged.contains(QStringLiteral("正文B")))
+            ? QStringLiteral("1") : QStringLiteral("0"));
+    // 手动顺序：b 在前 -> 正文B 出现在 正文A 之前
+    add(QStringLiteral("merge_order_manual"),
+        merged.indexOf(QStringLiteral("正文B")) < merged.indexOf(QStringLiteral("正文A"))
+            ? QStringLiteral("1") : QStringLiteral("0"));
+
+    // 3) 合并结果应生成一个标题为「合并结果」且含内容的标签
+    openMergedContent(merged);
+    bool titleOk = false;
+    bool contentOk = false;
+    for (int i = 0; i < m_editorTabs->count(); ++i) {
+        if (m_editorTabs->tabText(i) == tr("合并结果")) {
+            titleOk = true;
+            QPlainTextEdit *ed = qobject_cast<QPlainTextEdit *>(m_editorTabs->widget(i));
+            if (ed && ed->toPlainText().contains(QStringLiteral("正文A"))) {
+                contentOk = true;
+            }
+        }
+    }
+    add(QStringLiteral("merge_tab_title"), titleOk ? QStringLiteral("1") : QStringLiteral("0"));
+    add(QStringLiteral("merge_tab_content"), contentOk ? QStringLiteral("1") : QStringLiteral("0"));
+
+    // 4) 自动排序（按文件名）：a 应排到 b 之前
+    MergeDialog dlg2(this);
+    dlg2.addPaths(QStringList() << pb << pa);
+    if (QCheckBox *cb = dlg2.findChild<QCheckBox *>()) {
+        cb->setChecked(false);
+    }
+    QMetaObject::invokeMethod(&dlg2, "applyAutoSort", Q_ARG(int, 1)); // 1 = 按文件名
+    dlg2.doMerge(false);
+    const QString merged2 = dlg2.mergedText();
+    add(QStringLiteral("merge_autosort_name"),
+        merged2.indexOf(QStringLiteral("正文A")) < merged2.indexOf(QStringLiteral("正文B"))
+            ? QStringLiteral("1") : QStringLiteral("0"));
+
+    return out.join('\n');
 }

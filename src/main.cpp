@@ -284,6 +284,12 @@ int main(int argc, char *argv[])
         "自检：输出 Typora UI 规格（菜单/快捷键/格式与块级引擎）的验证结果");
     parser.addOption(selfTestUiOption);
 
+    // 自检：合并 Markdown 端到端
+    QCommandLineOption selfTestMergeOption(
+        QStringList() << "self-test-merge",
+        "自检：端到端验证合并 Markdown（对话框 -> 合并 -> 新标签）");
+    parser.addOption(selfTestMergeOption);
+
     // 无界面导出模式：用于自动化测试与脚本化转换
     QCommandLineOption exportOption(
         QStringList() << "export-html",
@@ -474,6 +480,15 @@ int main(int argc, char *argv[])
         QTextStream sout(stdout);
         sout.setEncoding(QStringConverter::Utf8);
         sout << w.selfTestTyporaUi() << "\n";
+        sout.flush();
+        return 0;
+    }
+
+    // 自检模式：合并 Markdown 端到端
+    if (parser.isSet(selfTestMergeOption)) {
+        QTextStream sout(stdout);
+        sout.setEncoding(QStringConverter::Utf8);
+        sout << w.selfTestMerge() << "\n";
         sout.flush();
         return 0;
     }
