@@ -6,6 +6,7 @@
 #include <QScrollBar>
 #include <QStandardPaths>
 #include <QFormLayout>
+#include <QVBoxLayout>
 #include <QSpinBox>
 #include <QComboBox>
 #include <QCheckBox>
@@ -168,10 +169,28 @@ void MainWindow::setupUi()
     // 预览区自身尺寸变化时也要重算居中边距
     // （分割条拖动不会触发 MainWindow 的 resizeEvent）
     m_preview->installEventFilter(this);
+
+    // 预览标签栏：仅在「单独预览模式」显示，用于在只有预览时切换已打开的文件。
+    // 它与编辑器标签（m_editorTabs）双向同步 —— 点它即切换编辑器当前标签，
+    // 预览随之更新；编辑器标签切换时它也跟随高亮。
+    m_previewTabs = new QTabBar(this);
+    m_previewTabs->setVisible(false);
+    m_previewTabs->setExpanding(false);
+    m_previewTabs->setDrawBase(false);
+    connect(m_previewTabs, &QTabBar::currentChanged,
+            this, &MainWindow::onPreviewTabChanged);
+
+    // 用容器把「预览标签栏 + 预览区」竖直排列，再把容器放进主分割器。
+    QWidget *previewWrap = new QWidget(this);
+    auto *previewLayout = new QVBoxLayout(previewWrap);
+    previewLayout->setContentsMargins(0, 0, 0, 0);
+    previewLayout->setSpacing(0);
+    previewLayout->addWidget(m_previewTabs);
+    previewLayout->addWidget(m_preview, 1);
     
     // 添加到主分割器
     m_mainSplitter->addWidget(m_editorTabs);
-    m_mainSplitter->addWidget(m_preview);
+    m_mainSplitter->addWidget(previewWrap);
     m_mainSplitter->setStretchFactor(0, 1);
     m_mainSplitter->setStretchFactor(1, 1);
 
@@ -1531,6 +1550,11 @@ void MainWindow::setPreviewOnlyMode(bool enabled)
         if (m_fileTreeDock) {
             m_fileTreeDock->setVisible(false);
         }
+        // 预览专属模式下仍显示标签栏，便于切换其它已打开的文件。
+        if (m_previewTabs) {
+            rebuildPreviewTabs();
+            m_previewTabs->setVisible(m_editorTabs->count() > 0);
+        }
         // 预览区独占中央区域。
         // 隐藏编辑器后 splitter 会自动把空间让给预览区，
         // 这里再把 stretch 权重全给预览区，确保它吃满可用宽度。
@@ -1543,6 +1567,9 @@ void MainWindow::setPreviewOnlyMode(bool enabled)
         QTimer::singleShot(150, this, [this]() { applyPreviewCentering(); });
     } else {
         m_editorTabs->setVisible(true);
+        if (m_previewTabs) {
+            m_previewTabs->setVisible(false);
+        }
         if (m_fileTreeDock) {
             m_fileTreeDock->setVisible(m_sidebarVisible);
         }
@@ -1647,6 +1674,48 @@ void MainWindow::onTabChanged(int index)
     updateStatusBar();
     // 标题栏跟随当前文档（"文件名 - Markdown Editor"）
     updateWindowTitle();
+
+    // 单独预览模式下同步预览标签栏（切换文件时高亮跟随）
+    if (m_previewOnlyMode && m_previewTabs) {
+        if (m_previewTabs->count() != m_editorTabs->count()) {
+            rebuildPreviewTabs();
+        } else {
+            m_syncingPreviewTabs = true;
+            for (int i = 0; i < m_editorTabs->count(); ++i) {
+                m_previewTabs->setTabText(i, m_editorTabs->tabText(i));
+            }
+            m_previewTabs->setCurrentIndex(m_editorTabs->currentIndex());
+            m_syncingPreviewTabs = false;
+        }
+    }
+}
+
+void MainWindow::onPreviewTabChanged(int index)
+{
+    if (m_syncingPreviewTabs || index < 0) {
+        return;
+    }
+    if (index < m_editorTabs->count()) {
+        m_editorTabs->setCurrentIndex(index);
+    }
+}
+
+void MainWindow::rebuildPreviewTabs()
+{
+    if (!m_previewTabs) {
+        return;
+    }
+    m_syncingPreviewTabs = true;
+    while (m_previewTabs->count() > 0) {
+        m_previewTabs->removeTab(0);
+    }
+    for (int i = 0; i < m_editorTabs->count(); ++i) {
+        m_previewTabs->addTab(m_editorTabs->tabText(i));
+    }
+    if (m_editorTabs->count() > 0) {
+        m_previewTabs->setCurrentIndex(m_editorTabs->currentIndex());
+    }
+    m_syncingPreviewTabs = false;
 }
 
 void MainWindow::onTextChanged()

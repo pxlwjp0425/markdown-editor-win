@@ -543,5 +543,17 @@ QString MainWindow::selfTestTabs()
     for (int i = 0; i < m_editorTabs->count(); ++i) {
         add(QStringLiteral("tab%1").arg(i), m_editorTabs->tabText(i));
     }
+
+    // 进入单独预览模式：应出现预览标签栏，且与编辑器标签数量一致
+    setPreviewOnlyMode(true);
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    add(QStringLiteral("preview_tabs_count"),
+        m_previewTabs ? QString::number(m_previewTabs->count()) : QStringLiteral("-1"));
+    add(QStringLiteral("preview_tabs_visible"),
+        (m_previewTabs && m_previewTabs->isVisible()) ? QStringLiteral("1") : QStringLiteral("0"));
+    setPreviewOnlyMode(false);
+    QCoreApplication::processEvents();
+
     return out.join('\n');
 }

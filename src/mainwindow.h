@@ -15,6 +15,7 @@
 #include <QFileSystemModel>
 #include <QTextBrowser>
 #include <QTabWidget>
+#include <QTabBar>
 #include <QComboBox>
 #include <QLabel>
 #include <QSpinBox>
@@ -202,6 +203,10 @@ private slots:
     void onTabChanged(int index);
     void onTextChanged();
     void updatePreview();
+
+    // 预览标签栏（单独预览模式下切换文件）
+    void onPreviewTabChanged(int index);
+    void rebuildPreviewTabs();
     
     // 文件树操作
     void onFileTreeClicked(const QModelIndex &index);
@@ -267,6 +272,9 @@ private:
     QTreeView *m_fileTree;
     QFileSystemModel *m_fileModel;
     QTextBrowser *m_preview;
+    // 预览标签栏：仅「单独预览模式」显示，用于切换已打开的文件
+    QTabBar *m_previewTabs;
+    bool m_syncingPreviewTabs = false;
 
     // 大纲面板（对应 Typora 的 Outline）
     OutlinePanel *m_outlinePanel;
